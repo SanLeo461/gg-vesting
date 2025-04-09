@@ -29,6 +29,7 @@ export const NETWORK_IMAGES: Record<Network, string> = {
   arbone: "/networks/arbone.png",
   nova: "/networks/arbnova.png"
 }
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 interface ChartData {
   month: string;
@@ -97,7 +98,10 @@ export const UserVesting = () => {
         value: targetNetwork === "arbone" ? sendFeeData![0] : 0n,
         chainId: arbitrumNova.id
       });
-      await listen(tx, ggVesting.refetch);
+      await listen(tx, async () => {
+        await delay(10_000);
+        await ggVesting.refetch();
+      });
     } finally {
       setIsClaimLoading(false);
     }
