@@ -19,8 +19,7 @@ export const HomeInputs = () => {
   return (
     <>
       <div className="flex flex-row gap-2 font-bold text-3xl text-gray-300 justify-center w-full items-center h-[10%]">
-        <div>ggvesting.sanleo.dev</div>
-        <div className="text-lg"></div>
+        <Link href="/"><div>ggvesting.sanleo.dev</div></Link>
       </div>
       <div className="flex flex-row gap-2 justify-center text-white w-full h-max">
         <input className="p-4 text-lg w-[80%] md:w-[60%] lg:w-[40%] xl:w-[25%] text-black text-center bg-white rounded-lg" placeholder="Address" value={input} onChange={e => setInput(e.target.value)}/>

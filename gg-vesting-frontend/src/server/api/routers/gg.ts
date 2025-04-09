@@ -29,7 +29,13 @@ export const ggRouter = createTRPCRouter({
     .query(async ({ input }) => {
       const response = (await (await fetch(`${API_URL}/user/${input.owner}/vested`)).json()) as UserVestedResponse;
 
-      console.log(response);
       return response;
     }),
+  totalVested: publicProcedure
+    .query(async () => {
+      const response = (await (await fetch(`${API_URL}/totalVested`)).json()) as VestingResponse[];
+
+      return response;
+    }
+  ),
 });

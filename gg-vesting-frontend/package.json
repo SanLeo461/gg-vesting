@@ -16,6 +16,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@headlessui/react": "^2.2.1",
+    "@heroicons/react": "^2.2.0",
     "@ponder/client": "^0.10.7",
     "@ponder/react": "^0.10.7",
     "@rainbow-me/rainbowkit": "^2.2.4",

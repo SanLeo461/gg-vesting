@@ -19,15 +19,10 @@ export default app;
 const VESTING_DURATION = 63072000n;
 const POW_PUNKS_VESTING_DURATION = 31536000n;
 const COMMUNITY_POOL_VESTING_DURATION = 31536000n;
-
-let timeStart = 0;
-async function logTime(message: string) {
-  const timeNow = Date.now();
-  if (timeStart === 0) {
-    timeStart = timeNow;
-  }
-  // fs.writeFileSync("time.txt", `${message}: ${timeNow - timeStart}ms\n`, { flag: "a" });
-}
+const ONE_MONTH = 2592000n;
+const ONE_DAY = 86400n;
+const MONTH_START_TIMESTAMP = 1743465600n; // 2025-04-01T00:00:00Z
+const TOTAL_VESTED_CACHE = new Map<bigint, TotalVested>();
 
 app.get("/dust/:dustId/vested", async (c) => {
   const dustId = BigInt(c.req.param("dustId"));
@@ -50,7 +45,6 @@ type VestingResponse = {
   details: Omit<VestedDetails, "vested"> & PowPunksVestingDetails & { totalVested: bigint };
 };
 app.get("/user/:address/vested", async (c) => {
-  logTime('start').catch(console.error);
   const dusts = await db.query.dustDetails.findMany({
     where: (table, { eq }) => eq(table.owner, c.req.param("address") as Address),
     limit: 100000
@@ -60,7 +54,7 @@ app.get("/user/:address/vested", async (c) => {
   const responses: VestingResponse[] = [];
   const poolDustIds: bigint[] = [];
   for (let i = 0; i < 24; i++) { // 1 month per i, 24 months
-    const timestamp = BigInt(Math.floor(Date.now() / 1000)) + (2592000n * BigInt(i));
+    const timestamp = BigInt(Math.floor(Date.now() / 1000)) + (ONE_MONTH * BigInt(i));
     const [vested, powPunksVesting] = await Promise.all([
       getVestedDetails(dusts, timestamp, address),
       getPowPunksVesting(address, timestamp)
@@ -88,8 +82,6 @@ app.get("/user/:address/vested", async (c) => {
     }
   }
   
-  logTime('end').catch(console.error);
-
   return c.json(replaceBigInts({
     responses,
     poolDustIds
@@ -97,7 +89,6 @@ app.get("/user/:address/vested", async (c) => {
 });
 
 app.get("/totalVested/:timestamp", async (c) => {
-  logTime('totalVestedStart').catch(console.error);
   const [dusts, powPunksDetails] = await Promise.all([
     db.query.dustDetails.findMany({
       limit: 1000000
@@ -105,18 +96,84 @@ app.get("/totalVested/:timestamp", async (c) => {
     db.query.powPunksDetails.findMany({ limit: 1000000 })
   ]);
   const timestamp = BigInt(c.req.param("timestamp"));
-  logTime('totalVestedRetrieve').catch(console.error);
 
   const [vested, powPunksVesting] = await Promise.all([
     getVestedDetails(dusts, timestamp),
     getPowPunksVesting(zeroAddress, timestamp, powPunksDetails)
   ]);
-  logTime('totalVestedEnd').catch(console.error);
 
   return c.json({
     ...replaceBigInts({...vested, vested: undefined}, (v) => String(v)),
     ...replaceBigInts(powPunksVesting, (v) => String(v))
   });
+});
+
+type TotalVested = {
+  totalVested: bigint;
+  totalTokenVesting: bigint;
+  totalTokenValue: bigint;
+  totalCommunityRewardsClaimable: bigint;
+  totalCommunityRewards: bigint;
+  totalCommunityRewardsClaimed: bigint;
+  totalDustValue: bigint;
+  totalVestedClaimed: bigint;
+  totalVestedUnclaimed: bigint;
+};
+app.get("/totalVested", async (c) => {
+  let dusts: (typeof dustDetails.$inferSelect)[] = [];
+  let powPunksDetails: (typeof schema.powPunksDetails.$inferSelect)[] = [];
+
+  const daysSince = Math.floor(((Math.floor(Date.now() / 1000) - Number(MONTH_START_TIMESTAMP))) / Number(ONE_DAY));
+  const startTime = BigInt(MONTH_START_TIMESTAMP) + (ONE_DAY * BigInt(daysSince));
+  
+  const responses: { timestamp: string, details: TotalVested }[] = [];
+  for (let i = 0; i < 24; i++) { // 1 month per i, 24 months
+    const timestamp = startTime + (ONE_MONTH * BigInt(i));
+    if (TOTAL_VESTED_CACHE.has(timestamp)) {
+      responses.push({
+        timestamp: String(timestamp),
+        details: TOTAL_VESTED_CACHE.get(timestamp)!
+      });
+      continue;
+    }
+
+    if (dusts.length === 0 && powPunksDetails.length === 0) {
+      [dusts, powPunksDetails] = await Promise.all([
+        db.query.dustDetails.findMany({
+          limit: 1000000
+        }),
+        db.query.powPunksDetails.findMany({ limit: 1000000 })
+      ]);    
+    }
+
+    const [vested, powPunksVesting] = await Promise.all([
+      getVestedDetails(dusts, timestamp),
+      getPowPunksVesting(zeroAddress, timestamp, powPunksDetails)
+    ]);
+
+    let totalAssumedCommunityRewardsClaimable = 0n;
+    vested.vested.forEach(dust => { // This is for counting community rewards for dust that have "finished" vesting, but haven't been claimed yet
+      // This implies that the community rewards should start vesting *now*
+      if (!dust.isVestingComplete) return; // Not vested yet :(
+      if (dust.vestingStartTime !== 0n) return; // This has been accounted for by the community rewards claimable
+                    // Assuming when vesting finishes that we start at 0, not somewhere between 0 -> 1, approximation
+      let vestedAmount = Math.min(i, 12); // Clamp to 12 months of vesting, since that's the max.
+      totalAssumedCommunityRewardsClaimable += (dust.totalCommunityRewards * BigInt(vestedAmount)) / 12n;
+    });
+
+    const details: TotalVested = {
+      ...{...vested, totalCommunityRewardsClaimable: vested.totalCommunityRewardsClaimable + totalAssumedCommunityRewardsClaimable, vested: undefined},
+      ...powPunksVesting,
+      totalVested: vested.totalCommunityRewardsClaimable + vested.totalCommunityRewardsClaimed + totalAssumedCommunityRewardsClaimable + vested.totalVestedClaimed + vested.totalVestedUnclaimed + powPunksVesting.totalTokenVesting,
+    };
+    if (i == 0) TOTAL_VESTED_CACHE.clear();
+    TOTAL_VESTED_CACHE.set(timestamp, details);
+    responses.push({
+      timestamp: String(timestamp),
+      details
+    });
+  }
+  return c.json(responses.map(r => ({ ...r, details: replaceBigInts(r.details, (v) => String(v)) })));
 });
 
 type VestedDetails = {
@@ -136,7 +193,6 @@ async function getVestedDetails(dusts: (typeof dustDetails.$inferSelect)[], time
   let totalVestedClaimed = 0n;
   let totalVestedUnclaimed = 0n;
   let checkpointMap: Map<bigint, (typeof dustCheckpoints.$inferSelect)[]> = new Map();
-  logTime('vestedStart').catch(console.error);
   if (owner) {
     const checkpoints = await db.query.dustCheckpoints.findMany({
       where: (table, { eq }) => eq(table.owner, owner),
@@ -161,10 +217,8 @@ async function getVestedDetails(dusts: (typeof dustDetails.$inferSelect)[], time
     });
   }
 
-  logTime('vestedCheckpoints').catch(console.error);
   const vested = dusts.map(dust => {
     const dustId = dust.tokenId;
-    logTime("dust start " + dustId).catch(console.error);
     let checkpoints: (typeof dustCheckpoints.$inferSelect)[] = checkpointMap.get(dustId)!;
     // if (owner) checkpoints = checkpointMap.get(dustId);
     // if (checkpoints === undefined) {
@@ -173,7 +227,6 @@ async function getVestedDetails(dusts: (typeof dustDetails.$inferSelect)[], time
     //     orderBy: asc(dustCheckpoints.checkpointId)
     //   });
     // }
-    logTime("dust checkpoint " + dustId).catch(console.error);
 
     const vested = amountVested(dustId, timestamp, checkpoints, dust);
     totalCommunityRewards += BigInt(vested.totalCommunityRewards);
@@ -184,7 +237,6 @@ async function getVestedDetails(dusts: (typeof dustDetails.$inferSelect)[], time
     if (vested.isVestingComplete && dust.released === 0n) {
       totalVestedUnclaimed += BigInt(dust.totalAllocation);
     }
-    logTime("dust end " + dustId).catch(console.error);
     
     return {
       dustId,
@@ -192,7 +244,6 @@ async function getVestedDetails(dusts: (typeof dustDetails.$inferSelect)[], time
       ...dust
     }
   });
-  logTime('vestedEnd').catch(console.error);
   return {
     vested,
     totalCommunityRewards,
@@ -273,7 +324,6 @@ interface PowPunksVestingDetails {
   totalTokenValue: bigint;
 }
 async function getPowPunksVesting(user: Address, timestamp: bigint, powPunksDetails?: (typeof schema.powPunksDetails.$inferSelect)[]): Promise<PowPunksVestingDetails> {
-  logTime('powPunksStart').catch(console.error);
   if (!powPunksDetails) {
     powPunksDetails = await db.query.powPunksDetails.findMany({
       where: (table, { eq }) => eq(table.owner, user),
@@ -295,7 +345,6 @@ async function getPowPunksVesting(user: Address, timestamp: bigint, powPunksDeta
     totalTokenVesting += vested;
   });
 
-  logTime('powPunksEnd').catch(console.error);
 
   return {
     totalTokenVesting,
