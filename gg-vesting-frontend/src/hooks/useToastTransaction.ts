@@ -4,7 +4,7 @@ import type { Hash } from "viem";
 import { useWaitForTransactionReceipt } from "wagmi";
 
 export function useToastTransaction() {
-  const [currentTx, setCurrentTx] = useState<{ hash: Hash, resolve: () => void, reject: () => void } | undefined>(undefined);
+  const [currentTx, setCurrentTx] = useState<{ hash: Hash, resolve: () => Promise<void>, reject: () => Promise<void> } | undefined>(undefined);
   const result = useWaitForTransactionReceipt(
     {
       hash: currentTx?.hash,
@@ -12,9 +12,9 @@ export function useToastTransaction() {
   );
   useEffect(() => {
     if (result?.isSuccess) {
-      currentTx?.resolve();
+      currentTx?.resolve().catch(console.error);
     } else if (result?.isError) {
-      currentTx?.reject();
+      currentTx?.reject().catch(console.error);
     }
   }, [result]);
 
@@ -31,7 +31,7 @@ export function useToastTransaction() {
           reject: async () => {
             await refetch?.();
             setCurrentTx(undefined);
-            reject();
+            reject(Error("Transaction failed"));
           }
         })
       });
@@ -51,7 +51,7 @@ export function useToastTransaction() {
             duration: 30_000
           }
         }
-      );
+      ).catch(console.error);
       return toastPromise;
     }
   }

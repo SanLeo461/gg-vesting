@@ -1,11 +1,8 @@
-import Link from "next/link";
-import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
-import { formatEther, isAddress } from "viem";
-import { useRouterUserAddress } from "~/hooks/useRouterUserAddress";
+import { formatEther } from "viem";
 import { api } from "~/utils/api";
 import { LoadingSpinner } from "./LoadingSpinner";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
 interface ChartData {
   month: string;
@@ -51,8 +48,8 @@ export const GlobalVesting = () => {
             >
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" stroke="white" />
-              <YAxis width={120} tickFormatter={value => value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")} stroke="white"/>
-              <Tooltip formatter={value => value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}/>
+              <YAxis width={120} tickFormatter={value => (value as number).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")} stroke="white"/>
+              <Tooltip formatter={value => (value as number).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}/>
               <Legend />
               <Area type="monotone" name="Total Rewards" dataKey="totalRewards" stackId="4" stroke="#ffc618" fill="#ffc618" fillOpacity={0.5}/>
               <Area type="monotone" name="Dust Rewards" dataKey="dustRewards" stackId="2" stroke="#82ca9d" fill="#82ca9d" fillOpacity={0.5}/>

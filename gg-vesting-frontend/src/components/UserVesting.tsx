@@ -1,16 +1,15 @@
-import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { encodePacked, formatEther, isAddress, padHex } from "viem";
 import { useRouterUserAddress } from "~/hooks/useRouterUserAddress";
 import { api } from "~/utils/api";
 import { LoadingSpinner } from "./LoadingSpinner";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { useAccount, useChainId, useReadContract, useWriteContract } from "wagmi";
 import Image from "next/image";
 import { useToastTransaction } from "~/hooks/useToastTransaction";
 import { COMMUNITY_POOL_ABI } from "../abi/communityPool.abi";
-import { arbitrum, arbitrumNova } from "viem/chains";
+import { arbitrumNova } from "viem/chains";
 import { GG_ABI, GG_ADDRESS } from "~/abi/GG.abi";
 import { DropdownItems } from "./DropdownItems";
 
@@ -51,9 +50,9 @@ export const UserVesting = () => {
 
   const { data: sendFeeData, isFetched: isSendFeeFetched } = useReadContract({
     abi: GG_ABI,
-    address: GG_ADDRESS["nova"],
+    address: GG_ADDRESS.nova,
     functionName: "estimateSendFee",
-    args: [LZ_CHAIN_IDS["arbone"], padHex(GG_ADDRESS["nova"], { size: 32 }), 100n, false, encodePacked(["uint16", "uint256"], [LZ_VERSION, LZ_GAS])]
+    args: [LZ_CHAIN_IDS.arbone, padHex(GG_ADDRESS.nova, { size: 32 }), 100n, false, encodePacked(["uint16", "uint256"], [LZ_VERSION, LZ_GAS])]
   });
   
   const ggVesting = api.gg.dusts.useQuery({ owner: input }, { enabled: isAddress(input), refetchInterval: 0, refetchOnWindowFocus: false });
@@ -80,7 +79,7 @@ export const UserVesting = () => {
     const oldInput = input;
     setInput(userRouterAddress);
     if (oldInput !== userRouterAddress) {
-      ggVesting.refetch();
+      ggVesting.refetch().catch(console.error);
     }
   }, [router.isReady, userRouterAddress]);
 
@@ -120,7 +119,7 @@ export const UserVesting = () => {
             >
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" stroke="white" />
-              <YAxis width={100} tickFormatter={value => value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")} stroke="white"/>
+              <YAxis width={100} tickFormatter={value => (value as bigint).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")} stroke="white"/>
               <Tooltip formatter={value => value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}/>
               <Legend />
               <Area type="monotone" name="Total Rewards" dataKey="totalRewards" stackId="4" stroke="#ffc618" fill="#ffc618" fillOpacity={0.5}/>

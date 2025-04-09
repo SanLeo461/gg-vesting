@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
-import toast from "react-hot-toast";
 import { isAddress } from "viem";
 import { useRouterUserAddress } from "~/hooks/useRouterUserAddress";
 import { api } from "~/utils/api";
@@ -27,7 +26,7 @@ export const HomeInputs = () => {
           if (!isAddress(input, { strict: false })) {
             e.preventDefault();
           }
-          utils.invalidate();
+          utils.invalidate().catch(console.error);
         }}>
           <button className="p-4 text-2xl text-white bg-slate-900 rounded-lg cursor-pointer disabled:cursor-not-allowed disabled:opacity-75" disabled={!isAddress(input, { strict: false })}>Search</button>
         </Link>

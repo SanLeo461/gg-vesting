@@ -1,6 +1,6 @@
 import { http } from 'wagmi'
-import { arbitrumNova, mainnet } from 'wagmi/chains'
-import { connectorsForWallets, getDefaultConfig } from '@rainbow-me/rainbowkit';
+import { arbitrumNova } from 'wagmi/chains'
+import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { fallback } from 'wagmi';
 import { metaMaskWallet, rainbowWallet, coinbaseWallet, walletConnectWallet, argentWallet, trustWallet, omniWallet, safeWallet, imTokenWallet, ledgerWallet, binanceWallet, bybitWallet, phantomWallet, uniswapWallet, rabbyWallet} from "@rainbow-me/rainbowkit/wallets"
 
